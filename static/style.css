@@ -1,0 +1,107 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, "PingFang SC", "Helvetica Neue", sans-serif;
+  background: #f5f6f8;
+  color: #1d1d1f;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  background: #fff;
+  border-bottom: 1px solid #e5e5e7;
+}
+
+header h1 { font-size: 18px; font-weight: 600; }
+
+.controls { display: flex; align-items: center; gap: 12px; }
+
+button.primary {
+  padding: 8px 20px;
+  border: none;
+  border-radius: 8px;
+  background: #007aff;
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+}
+button.primary:hover { background: #0069d9; }
+button.primary.recording { background: #ff3b30; }
+
+#record-status { font-size: 13px; color: #666; }
+#record-status.error { color: #ff3b30; }
+
+main { max-width: 1200px; margin: 0 auto; padding: 24px; }
+
+.hint { color: #888; padding: 32px; text-align: center; }
+
+.device-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.device-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px 20px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+.device-card .name { font-size: 15px; font-weight: 600; }
+.device-card .udid {
+  font-size: 11px; color: #999;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.device-card .badge {
+  display: inline-block;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+.badge.live { background: #e5f8ec; color: #1d8a43; }
+.badge.connecting { background: #fff4e0; color: #b26a00; }
+.badge.unpaired { background: #fff0f0; color: #c0392b; }
+.badge.error { background: #ffecec; color: #c0392b; }
+
+.device-card .temp {
+  font-size: 40px;
+  font-weight: 700;
+  margin: 10px 0 4px;
+  font-variant-numeric: tabular-nums;
+}
+.device-card .temp small { font-size: 18px; color: #888; font-weight: 400; }
+
+.device-card .detail { font-size: 13px; color: #555; line-height: 1.7; }
+.device-card .err-msg { font-size: 12px; color: #c0392b; margin-top: 6px; word-break: break-all; }
+
+#chart-section h2, #exports-section h2 { font-size: 15px; margin-bottom: 10px; }
+
+#chart {
+  width: 100%;
+  height: 360px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+#exports-section { margin-top: 24px; }
+#exports-list { list-style: none; }
+#exports-list li {
+  background: #fff;
+  border-radius: 8px;
+  padding: 10px 16px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+#exports-list a { color: #007aff; text-decoration: none; margin-left: 12px; }
+#exports-list a:hover { text-decoration: underline; }

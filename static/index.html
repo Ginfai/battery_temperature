@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>iPhone 电池温度监控</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌡️</text></svg>">
+<link rel="stylesheet" href="/static/style.css">
+<script src="/static/echarts.min.js"></script>
+</head>
+<body>
+<header>
+  <h1>iPhone 电池温度监控</h1>
+  <div class="controls">
+    <label for="record-interval" title="录制时数据落盘的行间隔秒数;实时画面不受影响">录制间隔
+      <select id="record-interval">
+        <option value="1" selected>1s</option>
+        <option value="5">5s</option>
+        <option value="10">10s</option>
+        <option value="30">30s</option>
+        <option value="60">60s</option>
+      </select>
+    </label>
+    <button id="btn-record" class="primary">● 开始录制</button>
+    <span id="record-status"></span>
+  </div>
+</header>
+
+<main>
+  <section id="devices" class="device-grid">
+    <p id="no-device" class="hint">等待设备连接…（请用 USB 线连接 iPhone）</p>
+  </section>
+
+  <section id="chart-section">
+    <h2>温度曲线（约 5 分钟窗口）</h2>
+    <div id="chart"></div>
+  </section>
+
+  <section id="exports-section" hidden>
+    <h2>录制会话</h2>
+    <ul id="exports-list"></ul>
+  </section>
+</main>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
