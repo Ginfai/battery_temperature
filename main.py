@@ -18,6 +18,14 @@ def default_out_dir() -> Path:
 
 
 def main() -> None:
+    # Windows 控制台默认 cp1252,打印中文会 UnicodeEncodeError 直接崩溃;
+    # 强制 UTF-8 输出(errors=replace 兜底非 UTF-8 终端)。对 stdout 与 stderr 都生效。
+    for stream in (sys.stdout, sys.stderr):
+        if stream is not None:
+            reconfigure = getattr(stream, "reconfigure", None)
+            if callable(reconfigure):
+                reconfigure(encoding="utf-8", errors="replace")
+
     parser = argparse.ArgumentParser(description="iPhone 电池温度实时监控")
     parser.add_argument("--port", type=int, default=8000, help="HTTP 端口（默认 8000）")
     parser.add_argument("--out", type=Path, default=default_out_dir(),
