@@ -1,0 +1,65 @@
+name: Build binaries
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]           # 打 v* 标签也触发
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install pyinstaller -r requirements.txt
+
+      - name: Build with PyInstaller
+        run: pyinstaller battmon.spec
+
+      - name: Smoke test the binary
+        shell: python
+        # 启动产物,轮询首页返回 200,超时即失败标红。exe 在 Windows runner 上也能直接跑。
+        run: |
+          import subprocess, time, urllib.request, os, sys
+          exe = os.path.join("dist", "battmon", "battmon.exe" if sys.platform == "win32" else "battmon")
+          port = "8799"
+          proc = subprocess.Popen([exe, "--port", port], cwd=os.getcwd(),
+                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+          try:
+              ok = False
+              for _ in range(30):   # 约 30s 超时,避免 runner 慢
+                  time.sleep(1)
+                  try:
+                      with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=2) as r:
+                          if r.status == 200:
+                              ok = True
+                              break
+                  except Exception:
+                      pass
+              if not ok:
+                  sys.exit("smoke test failed: home page did not return 200")
+              # 再确认静态资源被正确打包(--add-data 是否生效是关键)
+              with urllib.request.urlopen(f"http://127.0.0.1:{port}/static/index.html", timeout=2) as r:
+                  assert r.status == 200, "static resource missing"
+              print("smoke test OK")
+          finally:
+              proc.terminate()
+              try:
+                  proc.wait(timeout=5)
+              except Exception:
+                  proc.kill()
+
+      - name: Archive artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: battmon-${{ matrix.os }}
+          path: dist/battmon

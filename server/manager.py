@@ -36,6 +36,11 @@ def celsius_from_ioregistry(raw_temperature) -> float:
     return round(raw_temperature / 100, 2)
 
 
+def celsius_from_battery_manager(raw_temperature: int) -> float:
+    """Android BatteryManager EXTRA_TEMPERATURE 单位为十分之一摄氏度（°C×10），327 → 32.7°C。"""
+    return round(raw_temperature / 10, 1)
+
+
 @dataclass
 class Sample:
     timestamp: str
@@ -132,6 +137,9 @@ class DeviceManager:
     def __init__(self, out_root: Path):
         self.out_root = out_root
         self.collectors: dict = {}
+        # Android 网络来源设备（udid -> DeviceCollector）。与 USB collectors 分离：
+        # watcher 每 3s 按 usbmuxd 清单对账 self.collectors，混入的远程设备会被误判为拔线删除
+        self.remote_collectors: dict = {}
         self.recorder = None  # Recorder | None
         self._lock = asyncio.Lock()
         self._watch_task: Optional[asyncio.Task] = None
@@ -143,10 +151,11 @@ class DeviceManager:
         if self.recorder is not None:
             self.stop_recording()
         async with self._lock:
-            for collector in self.collectors.values():
+            for collector in list(self.collectors.values()) + list(self.remote_collectors.values()):
                 if collector.task:
                     collector.task.cancel()
             self.collectors.clear()
+            self.remote_collectors.clear()
         if self._watch_task:
             self._watch_task.cancel()
 
@@ -180,9 +189,53 @@ class DeviceManager:
             logger.exception("recording write failed")
             self.stop_recording(error=f"录制写入失败: {exc}")
 
+    def ingest_android_sample(self, udid: str, name: str = "", raw_temperature: int = 0,
+                              voltage_mv: int = 0, current_ma: int = 0,
+                              level_percent: int = -1, is_charging: bool = False) -> None:
+        """Android App 经 HTTP 推入一条电池样本。设备不存在则建远程 collector。
+
+        timestamp 由本机签发（与 iPhone 样本同一主机时钟），保证 elapsed_s/曲线时间轴一致。
+        """
+        collector = self.remote_collectors.get(udid)
+        if collector is None:
+            collector = DeviceCollector(udid, self)
+            collector.state.status = "live"
+            collector.state.connection_type = "Network"
+            collector.state.name = name or udid
+            self.remote_collectors[udid] = collector
+            logger.info("android device registered: %s (%s)", udid, name)
+        collector.state.model_identifier = "Android"
+        sample = Sample(
+            timestamp=datetime.now().astimezone().isoformat(timespec="milliseconds"),
+            temperature_c=celsius_from_battery_manager(raw_temperature),
+            voltage_mv=voltage_mv,
+            current_ma=current_ma,
+            level_percent=level_percent,
+            is_charging=is_charging,
+        )
+        collector.state.latest = sample
+        collector.state.history.append(sample)
+        self.on_remote_sample(udid, sample)
+
+    def remove_android_device(self, udid: str) -> bool:
+        """App 主动注销（如用户停止采集）。返回是否确有此设备。"""
+        return self.remote_collectors.pop(udid, None) is not None
+
+    def on_remote_sample(self, udid: str, sample: Sample) -> None:
+        """同 on_sample，但从 remote_collectors 取状态。"""
+        if self.recorder is None:
+            return
+        state = self.remote_collectors[udid].state
+        try:
+            self.recorder.write_sample(udid, state.name, sample)
+        except OSError as exc:
+            logger.exception("recording write failed")
+            self.stop_recording(error=f"录制写入失败: {exc}")
+
     def snapshot(self) -> dict:
         # 显式构造：vars(DeviceState) 会带出 history(deque) 与 latest(未展平的 Sample)，
         # 两者都不是 JSON 原生类型，直接 vars 会让 WS 序列化崩溃
+        all_collectors = list(self.collectors.values()) + list(self.remote_collectors.values())
         devices = [
             {
                 "udid": s.udid,
@@ -194,7 +247,7 @@ class DeviceManager:
                 "error": s.error,
                 "latest": vars(s.latest) if s.latest else None,
             }
-            for s in (c.state for c in self.collectors.values())
+            for s in (c.state for c in all_collectors)
         ]
         return {
             "devices": devices,
@@ -203,15 +256,20 @@ class DeviceManager:
 
     def history_of(self, udid: str) -> list:
         collector = self.collectors.get(udid)
+        if collector is None:
+            collector = self.remote_collectors.get(udid)
         return [vars(s) for s in collector.state.history] if collector else []
+
+    def _all_states(self) -> list:
+        return [c.state for c in
+                list(self.collectors.values()) + list(self.remote_collectors.values())]
 
     def start_recording(self, interval_s: float = 1.0) -> dict:
         if self.recorder is not None:
             raise RecordingActiveError()
         session_dir = self.out_root / datetime.now().strftime("%Y%m%d-%H%M%S")
         self.recorder = Recorder(session_dir, interval_s=interval_s)
-        live_states = [c.state for c in self.collectors.values()]
-        self.recorder.start([self._device_info(s) for s in live_states])
+        self.recorder.start([self._device_info(s) for s in self._all_states()])
         logger.info("recording started: %s", session_dir)
         return self.recorder.snapshot()
 
@@ -219,8 +277,7 @@ class DeviceManager:
         if self.recorder is None:
             raise NoRecordingError()
         recorder, self.recorder = self.recorder, None
-        states = [c.state for c in self.collectors.values()]
-        recorder.stop([self._device_info(s) for s in states], error=error)
+        recorder.stop([self._device_info(s) for s in self._all_states()], error=error)
         logger.info("recording stopped: %s", recorder.dir)
         return recorder.snapshot()
 

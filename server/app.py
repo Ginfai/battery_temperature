@@ -1,6 +1,7 @@
 """FastAPI 应用：路由、WebSocket 广播、生命周期管理。"""
 import asyncio
 import logging
+import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -14,8 +15,11 @@ from server.manager import DeviceManager, NoRecordingError, RecordingActiveError
 
 logger = logging.getLogger(__name__)
 
-STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
-EXPORTS_DIR = Path(__file__).resolve().parent.parent / "exports"
+_BUNDLE_ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent))
+STATIC_DIR = _BUNDLE_ROOT / "static"
+# 录制导出需用户可写;打包态(_MEIPASS 只读临时目录)下放到当前工作目录,源码态放项目根
+EXPORTS_DIR = (_BUNDLE_ROOT if not getattr(sys, "frozen", False)
+               else Path.cwd()) / "exports"
 
 BROADCAST_INTERVAL_S = 1.0
 
@@ -27,6 +31,16 @@ MAX_INTERVAL_S = 60
 
 class RecordingStartBody(BaseModel):
     interval_s: float = 1.0
+
+
+class AndroidSampleBody(BaseModel):
+    udid: str                       # Android 侧自生成稳定 ID（如 ANDROID_ID）
+    name: str = ""                  # 设备型号（Build.MODEL）
+    temperature: int                # BatteryManager EXTRA_TEMPERATURE，0.1°C
+    voltage_mv: int = 0
+    current_ma: int = 0
+    level_percent: int = -1
+    is_charging: bool = False
 
 
 class Broadcaster:
@@ -51,11 +65,12 @@ class Broadcaster:
             await asyncio.sleep(BROADCAST_INTERVAL_S)
 
 
-def create_app(out_root: Path) -> FastAPI:
+def create_app(out_root: Path, ingest_token: str = "") -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         manager = DeviceManager(out_root)
         app.state.manager = manager
+        app.state.ingest_token = ingest_token
         app.state.broadcaster = Broadcaster(manager)
         broadcaster_task = asyncio.create_task(app.state.broadcaster.run())
         await manager.start()
@@ -112,6 +127,27 @@ def create_app(out_root: Path) -> FastAPI:
             return app.state.manager.stop_recording()
         except NoRecordingError:
             raise HTTPException(status_code=409, detail="当前没有进行中的录制")
+
+    @app.post("/api/ingest/android")
+    async def ingest_android(body: AndroidSampleBody, token: str = ""):
+        """Android App 推送电池样本。token 经 --token 配置；未配置即关闭接入（不裸开）。"""
+        if not app.state.ingest_token or token != app.state.ingest_token:
+            raise HTTPException(status_code=401, detail="ingest token 无效")
+        manager = app.state.manager
+        manager.ingest_android_sample(
+            udid=body.udid, name=body.name, raw_temperature=body.temperature,
+            voltage_mv=body.voltage_mv, current_ma=body.current_ma,
+            level_percent=body.level_percent, is_charging=body.is_charging,
+        )
+        return {"ok": True}
+
+    @app.delete("/api/ingest/android/{udid}")
+    async def ingest_android_remove(udid: str, token: str = ""):
+        if not app.state.ingest_token or token != app.state.ingest_token:
+            raise HTTPException(status_code=401, detail="ingest token 无效")
+        if not app.state.manager.remove_android_device(udid):
+            raise HTTPException(status_code=404, detail="设备不存在")
+        return {"ok": True}
 
     @app.get("/api/export")
     async def export_list():

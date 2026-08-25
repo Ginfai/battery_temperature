@@ -4,6 +4,8 @@
 
 ## 运行
 
+**分发给非技术用户:** 见 [`DOCS/SETUP_GUIDE.md`](DOCS/SETUP_GUIDE.md)——一键脚本安装、图文步骤、Windows 需预装 iTunes 的说明。
+
 ```bash
 pip3 install -r requirements.txt
 python3 main.py                # 默认 http://127.0.0.1:8000
@@ -46,12 +48,23 @@ iPhone ──USB──▶ usbmuxd ──▶ lockdown(每设备一条)
 
 | 模块 | 职责 |
 |---|---|
-| `server/manager.py` | 设备热插拔 watcher、单设备采集任务、温度换算（centi-Kelvin → °C） |
+| `server/manager.py` | 设备热插拔 watcher、单设备采集任务、温度换算（centi-Celsius → °C） |
 | `server/recorder.py` | 录制会话：CSV 增量写、meta.json 整体重写 |
 | `server/app.py` | FastAPI 路由、WebSocket 广播 |
 | `static/` | 前端：设备卡片 + ECharts 曲线（离线可用） |
 
 数据源为 iOS `diagnostics_relay` 的 IORegistry `IOPMPowerSource`（免越狱），该接口仅请求-响应无推送，轮询是唯一方式。
+
+## 构建二进制(GitHub Actions)
+
+在 GitHub 上打 PyInstaller 产物(Mac + Windows)。有 `.github/workflows/build-release.yml`。
+
+- **手动触发**:仓库 → Actions → "Build binaries" → Run workflow。
+- **打 tag**:`git tag v0.1 && git push --tags` 也会自动触发。
+- 产物出现在这次 run 的 **Artifacts** 里:`battmon-macos-latest` / `battmon-windows-latest`(每个都是 onedir 目录的 zip)。
+- 本机也能直接用 `battmon.spec` 打出同构产物:`pyinstaller battmon.spec`。
+
+> 产物**未签名/未公证**,非开发者分发到他人机子上会遇 macOS 的 Gatekeeper 拦截,需"右键→打开"。Windows 端用户仍需预装 Apple iTunes/驱动才能读 iPhone(见 `DOCS/SETUP_GUIDE.md`)。
 
 ## 测试
 

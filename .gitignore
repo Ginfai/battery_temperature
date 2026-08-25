@@ -1,2 +1,16 @@
 # 导出的产物
 exports
+
+# PyInstaller 打包产物
+build/
+dist/
+# 不忽略全部 *.spec:battmon.spec 是要提交的构建配置。
+# 不写任何 *.spec 规则,个别临时 spec 若产生再个别忽略。
+
+# Python 缓存
+__pycache__/
+*.py[cod]
+.venv/
+
+# 压缩包
+battery_temp.zip
