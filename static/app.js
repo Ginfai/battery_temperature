@@ -33,6 +33,11 @@ let retryCount = 0;
 // ---- 渲染 ----
 function render(snapshot) {
   retryCount = 0;
+  document.getElementById("no-device").hidden = snapshot.devices.length > 0;
+  // usbmuxd 连不上(Windows 未装 iTunes/驱动)时,给用户更具体的引导
+  document.getElementById("no-device").textContent = snapshot.usbmuxd_error
+    ? `${snapshot.usbmuxd_error}(macOS 无需;Windows 请安装 Apple iTunes 后重试)`
+    : "等待设备连接...(请用 USB 线连接 iPhone)";
   renderDevices(snapshot.devices);
   renderChart(snapshot.devices);
   renderRecording(snapshot.recording);

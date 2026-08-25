@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from pymobiledevice3.exceptions import NotPairedError, PairingError
+from pymobiledevice3.exceptions import ConnectionFailedToUsbmuxdError, NotPairedError, PairingError
 from pymobiledevice3.lockdown import create_using_usbmux
 from pymobiledevice3.services.diagnostics import DiagnosticsService
 from pymobiledevice3.usbmux import list_devices
@@ -141,6 +141,7 @@ class DeviceManager:
         # watcher 每 3s 按 usbmuxd 清单对账 self.collectors，混入的远程设备会被误判为拔线删除
         self.remote_collectors: dict = {}
         self.recorder = None  # Recorder | None
+        self.usbmuxd_error = ""   # usbmuxd 连不上时的友好提示(如未装 Apple iTunes/驱动)
         self._lock = asyncio.Lock()
         self._watch_task: Optional[asyncio.Task] = None
 
@@ -173,7 +174,15 @@ class DeviceManager:
                         collector = self.collectors.pop(udid)
                         if collector.task:
                             collector.task.cancel()
+            except ConnectionFailedToUsbmuxdError:
+                # 连不上 usbmuxd:多半是未装 Apple iTunes/驱动(macOS 自带 /var/run/usbmuxd,
+                # Windows 需 iTunes 提供 127.0.0.1:27015)。给用户友好提示而非一行 traceback。
+                if not self.usbmuxd_error:
+                    logger.info("usbmuxd not reachable: %s",
+                                "可能未安装 Apple iTunes/驱动,或设备服务未启动")
+                self.usbmuxd_error = "未检测到 usbmuxd:请确认已安装 Apple iTunes/驱动后重试"
             except Exception:
+                self.usbmuxd_error = ""
                 logger.exception("device watch failed")
             await asyncio.sleep(WATCH_INTERVAL_S)
 
@@ -252,6 +261,7 @@ class DeviceManager:
         return {
             "devices": devices,
             "recording": self.recorder.snapshot() if self.recorder else None,
+            "usbmuxd_error": self.usbmuxd_error,
         }
 
     def history_of(self, udid: str) -> list:

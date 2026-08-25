@@ -60,3 +60,29 @@ def test_recording_includes_remote_samples(manager):
     meta = json.loads((Path(snap["path"]) / "meta.json").read_text(encoding="utf-8"))
     st = meta["per_device_stats"]["ANDROID-1"]
     assert st["device_name"] == "Pixel 8"
+
+
+def test_usbmuxd_error_sets_friendly_hint(monkeypatch):
+    """usbmuxd 连不上(Windows 未装 iTunes/驱动)时,snapshot 携带友好提示而非让服务崩。"""
+    import asyncio
+    from unittest.mock import patch
+
+    from server.manager import DeviceManager
+    from pymobiledevice3.exceptions import ConnectionFailedToUsbmuxdError
+
+    async def run_once():
+        m = DeviceManager("/tmp/nonexistent")
+        # 让 _watch_loop 第一次 sleep 就取消,只跑一次对账就返回,避免死循环
+        with patch("server.manager.list_devices",
+                   side_effect=ConnectionFailedToUsbmuxdError()), \
+             patch("server.manager.asyncio.sleep",
+                   side_effect=asyncio.CancelledError):
+            try:
+                await m._watch_loop()
+            except asyncio.CancelledError:
+                pass  # 单次迭代结束,正常退出
+        return m.usbmuxd_error, m.snapshot()["usbmuxd_error"]
+
+    err, snap_err = asyncio.run(run_once())
+    assert "iTunes" in err
+    assert snap_err == err
