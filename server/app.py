@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from server.manager import DeviceManager, NoRecordingError, RecordingActiveError
-from server.mdns import MDNSAdvertiser
+from server.mdns import MDNSAdvertiser, _lan_ipv4
 
 logger = logging.getLogger(__name__)
 
@@ -72,12 +72,13 @@ def create_app(out_root: Path, ingest_token: str = "", mdns: bool = False, port:
         manager = DeviceManager(out_root)
         app.state.manager = manager
         app.state.ingest_token = ingest_token
+        app.state.port = port
         app.state.broadcaster = Broadcaster(manager)
         broadcaster_task = asyncio.create_task(app.state.broadcaster.run())
         advertiser = MDNSAdvertiser(port) if mdns else None
         app.state.advertiser = advertiser
         if advertiser is not None:
-            advertiser.start()
+            await advertiser.start()
         await manager.start()
         logger.info("device manager started")
         try:
@@ -86,7 +87,7 @@ def create_app(out_root: Path, ingest_token: str = "", mdns: bool = False, port:
             await manager.stop()
             broadcaster_task.cancel()
             if advertiser is not None:
-                advertiser.stop()
+                await advertiser.stop()
             logger.info("device manager stopped")
 
     app = FastAPI(title="iPhone Battery Temperature Monitor", lifespan=lifespan)
@@ -157,6 +158,16 @@ def create_app(out_root: Path, ingest_token: str = "", mdns: bool = False, port:
         if not app.state.manager.remove_android_device(udid):
             raise HTTPException(status_code=404, detail="设备不存在")
         return {"ok": True}
+
+    @app.get("/api/android-config")
+    async def android_config():
+        """Android App 接入配置(供网页引导用户填写)。token 为空时接入关闭,仍返回空 token 提示。"""
+        return {
+            "host": _lan_ipv4(),
+            "port": app.state.port,
+            "token": app.state.ingest_token,
+            "enabled": bool(app.state.ingest_token),
+        }
 
     @app.get("/api/export")
     async def export_list():

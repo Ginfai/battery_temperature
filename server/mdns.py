@@ -1,11 +1,15 @@
 """mDNS 服务发布:向局域网广播监控服务地址,供 Android App 自动发现。
 
 只广播 host+port(不含任何 token),token 由用户在 App 内手动输入。
+注册/注销走 AsyncZeroconf,复用调用方事件循环 —— 在 FastAPI lifespan(async)里同步调用
+阻塞的 Zeroconf 会 EventLoopBlocked,故必须用异步 API。
 """
+import asyncio
 import logging
 import socket
 
-from zeroconf import IPVersion, ServiceInfo, Zeroconf
+from zeroconf import IPVersion
+from zeroconf.asyncio import AsyncServiceInfo, AsyncZeroconf
 
 logger = logging.getLogger(__name__)
 
@@ -30,33 +34,31 @@ def _lan_ipv4() -> str:
 
 
 class MDNSAdvertiser:
-    """生命周期内发布 _battmon._tcp 服务。start 注册、stop 注销。"""
+    """生命周期内发布 _battmon._tcp 服务。async start 注册、async stop 注销。"""
 
     def __init__(self, port: int):
         self.port = port
-        self._zc: Zeroconf | None = None
-        self._info: ServiceInfo | None = None
+        self._zc: AsyncZeroconf | None = None
+        self._info: AsyncServiceInfo | None = None
 
-    def start(self) -> None:
+    async def start(self) -> None:
         ip = _lan_ipv4()
         logger.info("发布 mDNS 服务 %s 在 %s:%d", SERVICE_NAME, ip, self.port)
-        self._zc = Zeroconf(ip_version=IPVersion.V4Only)
-        self._info = ServiceInfo(
+        self._zc = AsyncZeroconf(ip_version=IPVersion.V4Only)
+        self._info = AsyncServiceInfo(
             SERVICE_TYPE,
             f"{SERVICE_NAME}.{SERVICE_TYPE}",
             addresses=[socket.inet_aton(ip)],
             port=self.port,
             properties={"_": "battmon"},  # 只声明存在,不含 token
         )
-        self._zc.register_service(self._info)
+        await self._zc.async_register_service(self._info)
 
-    def stop(self) -> None:
+    async def stop(self) -> None:
         if self._zc is not None:
             if self._info is not None:
-                try:
-                    self._zc.unregister_service(self._info)
-                except Exception:
-                    logger.warning("注销 mDNS 服务失败", exc_info=True)
-            self._zc.close()
+                await self._zc.async_unregister_service(self._info)
+            await self._zc.async_close()
             self._zc = None
             self._info = None
+            logger.info("mDNS 服务已注销")

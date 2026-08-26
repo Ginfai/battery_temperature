@@ -22,6 +22,7 @@
       </select>
     </label>
     <button id="btn-record" class="primary">● 开始录制</button>
+    <button id="btn-android-config">Android 设备配置</button>
     <span id="record-status"></span>
   </div>
 </header>
@@ -41,6 +42,17 @@
     <ul id="exports-list"></ul>
   </section>
 </main>
+
+<!-- Android 设备接入配置弹窗 -->
+<div id="android-config-modal" class="modal" style="display:none">
+  <div class="modal-box">
+    <h3>Android 设备接入配置</h3>
+    <div id="android-config-body" class="config-body">加载中...</div>
+    <div class="modal-actions">
+      <button id="android-config-close">关闭</button>
+    </div>
+  </div>
+</div>
 
 <script src="/static/app.js"></script>
 </body>

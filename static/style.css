@@ -105,3 +105,56 @@ main { max-width: 1200px; margin: 0 auto; padding: 24px; }
 }
 #exports-list a { color: #007aff; text-decoration: none; margin-left: 12px; }
 #exports-list a:hover { text-decoration: underline; }
+
+/* ---- Android 设备配置按钮 ---- */
+#btn-android-config {
+  padding: 8px 16px;
+  border: 1px solid #d0d0d5;
+  border-radius: 8px;
+  background: #fff;
+  color: #1d1d1f;
+  font-size: 14px;
+  cursor: pointer;
+}
+#btn-android-config:hover { background: #f5f6f8; }
+
+/* ---- Android 配置弹窗 ---- */
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+.modal-box {
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px 24px;
+  width: 340px;
+  max-width: 90vw;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.2);
+}
+.modal-box h3 { font-size: 16px; margin-bottom: 12px; }
+.config-body p { margin: 8px 0; font-size: 14px; }
+.config-body code {
+  display: block;
+  background: #f5f6f8;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-family: "SF Mono", Menlo, monospace;
+  margin-top: 4px;
+  word-break: break-all;
+}
+.config-warn { color: #b26a00; }
+.config-hint { color: #888; font-size: 12px; margin-top: 12px; }
+.modal-actions { text-align: right; margin-top: 16px; }
+.modal-actions button {
+  padding: 6px 18px;
+  border: 1px solid #d0d0d5;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+}
+.modal-actions button:hover { background: #f5f6f8; }

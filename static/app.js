@@ -1,4 +1,4 @@
-/* 前端：WS 接入 + 设备卡片渲染 + ECharts 多设备温度曲线。 */
+/* 前端:WS 接入 + 设备卡片渲染 + ECharts 多设备温度曲线。 */
 "use strict";
 
 const WINDOW_MS = 5 * 60 * 1000;  // 曲线窗口约 5 分钟
@@ -8,13 +8,27 @@ const deviceEls = new Map();   // udid -> card element
 const seriesData = new Map();  // udid -> [[timestampMs, tempC], ...]
 let chart = null;
 
-// ---- WebSocket（自动重连）----
-function connect() {
-  const ws = new WebSocket(`ws://${location.host}/ws`);
+// ---- WebSocket(带心跳 + 可靠自动重连)----
+// 以前:onclose 才重连,WS 被中间设备/系统半挂(能 open 但不再收发)时不会触发 onclose → 页面冻结。
+// 现在:HEARTBEAT_MS 无消息即主动断开触发重连;固定 RECONNECT_MS 重连;标签页重新可见时主动重连。
+let ws = null;
+let heartbeatTimer = null;
+let reconnectTimer = null;
+const HEARTBEAT_MS = 10000;   // 无消息超时,视为连接半死
+const RECONNECT_MS = 3000;    // 断线固定重连间隔
 
-  ws.onopen = () => console.log("ws connected");
+function connect() {
+  if (ws) { try { ws.close(); } catch (e) {} }
+  ws = new WebSocket(`ws://${location.host}/ws`);
+
+  ws.onopen = () => {
+    console.log("ws connected");
+    clearTimeout(reconnectTimer);
+    heartbeat();
+  };
 
   ws.onmessage = (event) => {
+    heartbeat();
     const msg = JSON.parse(event.data);
     if (msg.type === "init") {
       for (const [udid, samples] of Object.entries(msg.histories)) {
@@ -26,13 +40,36 @@ function connect() {
     }
   };
 
-  ws.onclose = () => setTimeout(connect, Math.min(1000 * (2 ** retryCount++), 15000));
+  ws.onclose = () => {
+    stopHeartbeat();
+    clearTimeout(reconnectTimer);
+    reconnectTimer = setTimeout(connect, RECONNECT_MS);
+  };
+  ws.onerror = () => { try { ws.close(); } catch (e) {} };
 }
-let retryCount = 0;
+
+// 心跳:连接半死(能 open 但不再收消息)时主动断开,走 onclose 重连
+function heartbeat() {
+  clearTimeout(heartbeatTimer);
+  heartbeatTimer = setTimeout(() => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      try { ws.close(); } catch (e) {}
+    }
+  }, HEARTBEAT_MS);
+}
+function stopHeartbeat() { clearTimeout(heartbeatTimer); }
+
+// 标签页重新可见时主动重连(浏览器后台会暂挂 WS)
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) {
+    stopHeartbeat();
+    clearTimeout(reconnectTimer);
+    reconnectTimer = setTimeout(connect, RECONNECT_MS);
+  }
+});
 
 // ---- 渲染 ----
 function render(snapshot) {
-  retryCount = 0;
   document.getElementById("no-device").hidden = snapshot.devices.length > 0;
   // usbmuxd 连不上(Windows 未装 iTunes/驱动)时,给用户更具体的引导
   document.getElementById("no-device").textContent = snapshot.usbmuxd_error
@@ -123,7 +160,7 @@ function renderChart(devices) {
     });
   }
 
-  // 设备断开后其 series 必须显式移除：ECharts merge 模式不会因传入空数组而清掉旧曲线
+  // 设备断开后其 series 必须显式移除:ECharts merge 模式不会因传入空数组而清掉旧曲线
   for (const udid of [...seriesData.keys()]) {
     if (!liveIds.has(udid)) seriesData.delete(udid);
   }
@@ -176,7 +213,7 @@ function renderRecording(rec) {
     btn.textContent = "■ 停止录制";
     btn.classList.add("recording");
     sel.disabled = true;
-    setRecordStatus(`录制中：${rec.sample_count} 样本 · 间隔 ${rec.interval_s}s · ${formatDuration(rec.duration_s)} · ${rec.dir}`);
+    setRecordStatus(`录制中:${rec.sample_count} 样本 · 间隔 ${rec.interval_s}s · ${formatDuration(rec.duration_s)} · ${rec.dir}`);
   } else {
     btn.textContent = "● 开始录制";
     btn.classList.remove("recording");
@@ -217,3 +254,32 @@ initChart();
 document.getElementById("btn-record").addEventListener("click", toggleRecording);
 refreshExports();
 connect();
+
+// ---- Android 设备接入配置弹窗 ----
+function openAndroidConfig() {
+  const modal = document.getElementById("android-config-modal");
+  modal.style.display = "flex";   // 用内联 display 控制,避免 CSS display:flex 覆盖 hidden
+  const body = document.getElementById("android-config-body");
+  body.textContent = "加载中...";
+  fetch("/api/android-config")
+    .then(r => r.json())
+    .then(cfg => {
+      if (!cfg.enabled) {
+        body.innerHTML =
+          `<p class="config-warn">未开启 Android 接入。<br>` +
+          `请用 <code>--token &lt;值&gt;</code> 启动服务端后重启。</p>`;
+        return;
+      }
+      body.innerHTML =
+        `<p>服务器地址(IP)<br><code>${esc(cfg.host)}</code></p>` +
+        `<p>端口<br><code>${esc(String(cfg.port))}</code></p>` +
+        `<p>接入 Token<br><code>${esc(cfg.token)}</code></p>` +
+        `<p class="config-hint">请在 Android App 中填入以上参数后开始采集。</p>`;
+    })
+    .catch(e => { body.textContent = "获取配置失败: " + e; });
+}
+function closeAndroidConfig() {
+  document.getElementById("android-config-modal").style.display = "none";
+}
+document.getElementById("btn-android-config").addEventListener("click", openAndroidConfig);
+document.getElementById("android-config-close").addEventListener("click", closeAndroidConfig);
