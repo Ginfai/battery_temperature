@@ -8,7 +8,6 @@ a = Analysis(
     pathex=[],
     binaries=[],
     datas=[("static", "static")],
-    hiddenimports=[],
     hookspath=[],
     runtime_hooks=[],
     excludes=[],
