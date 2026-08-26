@@ -52,7 +52,15 @@ class MDNSAdvertiser:
             port=self.port,
             properties={"_": "battmon"},  # 只声明存在,不含 token
         )
-        await self._zc.async_register_service(self._info)
+        try:
+            await self._zc.async_register_service(self._info)
+        except Exception as exc:
+            # mDNS 是可选增强,不因注册失败(如局域网内已有重名服务)拖垮主服务。
+            # 记日志并降级为不发布,HTTP 功能照常可用。
+            logger.warning("mDNS 发布失败,降级为不发布(不影响本机监控): %s", exc)
+            await self._zc.async_close()
+            self._zc = None
+            self._info = None
 
     async def stop(self) -> None:
         if self._zc is not None:

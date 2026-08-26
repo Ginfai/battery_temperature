@@ -1,4 +1,4 @@
-# iPhone 电池温度监控
+# 电池温度监控
 
 通过 USB 连接的 iPhone 电池温度实时监控：多设备同屏、温度曲线、录制与导出。
 
@@ -13,6 +13,10 @@ python3 main.py --port 9000 --open   # 自定义端口并自动打开浏览器
 ```
 
 首次连接设备时，iPhone 上会弹出"信任此电脑"对话框，点按"信任"即可。
+
+## Android 手机接入(Wi-Fi)
+
+同一局域网内,Android 手机可把电池数据实时推送到本机显示。启动服务端后,**在监控页点右上角「Android 设备配置」**即可看到服务器地址、端口、接入 Token,在 Android 采集 App 里填入即可连接。`--token` 指定 Android 接入令牌;留空则每次启动自动生成 4 位数字令牌并开启接入。详见 [`DOCS/SETUP_GUIDE.md`](DOCS/SETUP_GUIDE.md)。
 
 ## 功能
 

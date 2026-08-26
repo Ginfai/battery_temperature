@@ -90,7 +90,7 @@ def create_app(out_root: Path, ingest_token: str = "", mdns: bool = False, port:
                 await advertiser.stop()
             logger.info("device manager stopped")
 
-    app = FastAPI(title="iPhone Battery Temperature Monitor", lifespan=lifespan)
+    app = FastAPI(title="Battery Temperature Monitor", lifespan=lifespan)
 
     @app.get("/")
     async def index():
