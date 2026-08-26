@@ -1,3 +1,4 @@
 pymobiledevice3==10.10.3
 fastapi>=0.115,<1
 uvicorn>=0.30
+zeroconf>=0.100

@@ -12,6 +12,7 @@ a = Analysis(
     hookspath=[],
     runtime_hooks=[],
     excludes=[],
+    hiddenimports=["zeroconf", "zeroconf._utils.ipaddress"],
     noarchive=False,
 )
 

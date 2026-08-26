@@ -27,21 +27,23 @@ def main() -> None:
                 reconfigure(encoding="utf-8", errors="replace")
 
     parser = argparse.ArgumentParser(description="iPhone 电池温度实时监控")
-    parser.add_argument("--port", type=int, default=8000, help="HTTP 端口（默认 8000）")
+    parser.add_argument("--port", type=int, default=8000, help="HTTP 端口(默认 8000)")
     parser.add_argument("--out", type=Path, default=default_out_dir(),
-                        help="录制数据输出目录（默认 ./exports）")
+                        help="录制数据输出目录(默认 ./exports)")
     parser.add_argument("--open", action="store_true", help="启动后自动打开浏览器")
-    parser.add_argument("--token", default="", help="Android App 数据接入令牌；留空=关闭接入")
+    parser.add_argument("--token", default="", help="Android App 数据接入令牌;留空=关闭接入")
+    parser.add_argument("--mdns", action="store_true",
+                        help="发布 _battmon._tcp mDNS 服务供局域网内 Android App 自动发现")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
-    app = create_app(args.out.resolve(), ingest_token=args.token)
+    app = create_app(args.out.resolve(), ingest_token=args.token, mdns=args.mdns, port=args.port)
     url = f"http://127.0.0.1:{args.port}"
-    print(f"电池温度监控已启动：{url}")
+    print(f"电池温度监控已启动:{url}")
     if args.open:
         webbrowser.open(url)
-    uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="warning")
+    uvicorn.run(app, host="0.0.0.0", port=args.port, log_level="warning")
 
 
 if __name__ == "__main__":

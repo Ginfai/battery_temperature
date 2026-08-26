@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from server.manager import DeviceManager, NoRecordingError, RecordingActiveError
+from server.mdns import MDNSAdvertiser
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +66,7 @@ class Broadcaster:
             await asyncio.sleep(BROADCAST_INTERVAL_S)
 
 
-def create_app(out_root: Path, ingest_token: str = "") -> FastAPI:
+def create_app(out_root: Path, ingest_token: str = "", mdns: bool = False, port: int = 8000) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         manager = DeviceManager(out_root)
@@ -73,12 +74,20 @@ def create_app(out_root: Path, ingest_token: str = "") -> FastAPI:
         app.state.ingest_token = ingest_token
         app.state.broadcaster = Broadcaster(manager)
         broadcaster_task = asyncio.create_task(app.state.broadcaster.run())
+        advertiser = MDNSAdvertiser(port) if mdns else None
+        app.state.advertiser = advertiser
+        if advertiser is not None:
+            advertiser.start()
         await manager.start()
         logger.info("device manager started")
-        yield
-        await manager.stop()
-        broadcaster_task.cancel()
-        logger.info("device manager stopped")
+        try:
+            yield
+        finally:
+            await manager.stop()
+            broadcaster_task.cancel()
+            if advertiser is not None:
+                advertiser.stop()
+            logger.info("device manager stopped")
 
     app = FastAPI(title="iPhone Battery Temperature Monitor", lifespan=lifespan)
 
