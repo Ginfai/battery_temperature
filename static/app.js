@@ -109,8 +109,10 @@ function updateCard(card, d) {
 
   let detail = "";
   if (latest && d.status === "live") {
-    const currentSign = latest.current_ma >= 0 ? "充电" : "放电";
-    detail = `电压 ${latest.voltage_mv} mV · 电流 ${latest.current_ma} mA (${currentSign})<br>` +
+    // 充电状态以服务端 is_charging 为准(该字段来自设备真实电池状态)。
+    // 不用电流符号猜:Android ROM 放电电流符号约定不一(不少为正),按符号判断会与 is_charging 矛盾。
+    const chargingLabel = latest.is_charging ? "充电" : "放电";
+    detail = `电压 ${latest.voltage_mv} mV · 电流 ${latest.current_ma} mA (${chargingLabel})<br>` +
              `电量 ${latest.level_percent}% · ${latest.is_charging ? "充电中 ⚡" : "未充电"}`;
   } else if (d.name || d.model_identifier) {
     detail = `${d.model_identifier} · iOS ${d.ios_version}`;
